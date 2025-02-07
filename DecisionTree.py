@@ -1,13 +1,11 @@
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from sklearn.tree import DecisionTreeRegressor
-from sklearn.metrics import mean_absolute_error
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-
-
-## I AINT DONE - Elfian ##
 
 # Load the cleaned dataset
 df = pd.read_csv("cleanedHDB.csv")
@@ -15,8 +13,8 @@ df = pd.read_csv("cleanedHDB.csv")
 df['month'] = pd.to_datetime(df['month'])
 
 # Encode categorical 'street_name' into numbers
-label_encoder = LabelEncoder()
-df['street_name'] = label_encoder.fit_transform(df['street_name'])
+#label_encoder = LabelEncoder()
+#df['street_name'] = label_encoder.fit_transform(df['street_name'])
 
 if 'resale_price' in df.columns:
     print("Column exists")
@@ -24,7 +22,7 @@ else:
     print("Column does not exist")
 
 # according to my research(totally chatgpt), this 2 affects the resale value the most
-features = ["remaining_years", "street_name"]
+features = ["remaining_years", "floor_area_sqm"]
 target = "resale_price"
 
 # Ensure selected columns exist in the dataset
@@ -34,30 +32,39 @@ df = df[features + [target]]
 X = df.drop(columns=[target])
 y = df[target]
 
+# Ensure the new data contains only the required feature columns
+new_data = df[["remaining_years", "floor_area_sqm"]]
+
+####################################################
+# Split the data into training and testing sets
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Train a Decision Tree Regressor
-model = DecisionTreeRegressor(random_state=42)
-model.fit(X_train, y_train)
+# Initialize StandardScaler
+scaler = StandardScaler()
 
-# Make predictions
-y_predict = model.predict(X_test)
+# Fit the scaler on the training data and transform the training data
+X_train_scaled = scaler.fit_transform(X_train)
 
-# Evaluate using Mean Absolute Error (MAE)
-mae = mean_absolute_error(y_test, y_predict)
-print(f"Mean Absolute Error: {mae}")
+# Transform the test data using the fitted scaler
+X_test_scaled = scaler.transform(X_test)
 
-# Convert predictions into a DataFrame for visualization
-df_predicted = pd.DataFrame({'Actual': y_test, 'Predicted': y_predict})
-df_predicted = df_predicted.sort_index()  # Align with original index
+# Initialize and train the model on the scaled data
+reg = DecisionTreeRegressor(max_depth=5, random_state=42)
+reg.fit(X_train_scaled, y_train)
+
+# Scale the new data using the previously fitted scaler
+new_data_scaled = scaler.transform(new_data)
+
+# Predict resale prices for the new data
+future_predictions = reg.predict(new_data_scaled)
+
+# Scale the new data using the same scaler fitted on the training data
+new_data_scaled = scaler.transform(new_data)
+
+# Predict resale prices for the new data
+future_predictions = reg.predict(new_data_scaled)
+
+# Display predicted values
+print("Predicted resale prices for future data:", future_predictions)
 
 
-plt.figure(figsize=(12, 6))
-plt.plot(df_predicted.index, df_predicted['Actual'], label="Actual Prices", marker='o', linestyle='dashed')
-plt.plot(df_predicted.index, df_predicted['Predicted'], label="Predicted Prices", marker='o', linestyle='solid', alpha=0.7)
-plt.title("📈 Actual vs Predicted Resale Prices")
-plt.xlabel("Index")
-plt.ylabel("Resale Price (SGD)")
-plt.legend()
-plt.grid(True)
-plt.show()
