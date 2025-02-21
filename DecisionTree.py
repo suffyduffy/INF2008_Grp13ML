@@ -66,8 +66,7 @@ future_predictions = reg.predict(new_data_scaled)
 
 df['predicted_resale_price'] = future_predictions
 df['year'] = df['month'].dt.year
-df['future_year'] = df['year'] + 8  # Set future year for visualization (e.g., 8 years ahead)
-
+df['future_year'] = df['year'] + 8  # Set future year for plotting purposes
 # Calculate the average predicted resale price per future year
 avg_predicted_prices = df.groupby('future_year')['predicted_resale_price'].mean()
 avg_predicted_prices.index = avg_predicted_prices.index.astype(int)
