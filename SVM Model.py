@@ -1,69 +1,189 @@
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split, GridSearchCV
-from sklearn.preprocessing import StandardScaler, OneHotEncoder, LabelEncoder
+from sklearn.model_selection import train_test_split, RandomizedSearchCV, KFold
+from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-from sklearn.svm import SVR 
+from sklearn.svm import SVR
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Function to remove outliers using IQR
+def remove_outliers_iqr_numpy(data, column):
+    Q1 = np.percentile(data[column], 25)
+    Q3 = np.percentile(data[column], 75)
+    IQR = Q3 - Q1
+    lower_bound = Q1 - 1.5 * IQR
+    upper_bound = Q3 + 1.5 * IQR
+    data_filtered = data[(data[column] >= lower_bound) & (data[column] <= upper_bound)]
+    return data_filtered
+
+# Function to generate prediction intervals using bootstrapping
+def get_prediction_intervals(model, X, percentile=95):
+    n_bootstraps = 1000
+    bootstrap_predictions = []
+    for _ in range(n_bootstraps):
+        bootstrap_indices = np.random.choice(len(X), size=len(X), replace=True)
+        X_bootstrap = X[bootstrap_indices]
+        bootstrap_pred = model.predict(X_bootstrap)
+        bootstrap_predictions.append(bootstrap_pred)
+    bootstrap_predictions = np.array(bootstrap_predictions)
+    lower_bound = np.percentile(bootstrap_predictions, (100 - percentile) / 2, axis=0)
+    upper_bound = np.percentile(bootstrap_predictions, 100 - (100 - percentile) / 2, axis=0)
+    return lower_bound, upper_bound
 
 # Load the HDB dataset
-df = pd.read_csv('cleanedHDB_shortened.csv')
+df = pd.read_csv('cleanedHDB.csv')
 
-# Select relevant columns, including 'room_type'
-features = ["remaining_years", "floor_area_sqm", "flat_type"]  
+# Remove outliers from 'resale_price'
+df = remove_outliers_iqr_numpy(df, 'resale_price')
+
+# Select relevant columns, including 'month' for year calculation
+features = ["remaining_years", "floor_area_sqm", "month"]
 target = "resale_price"
 df = df[[*features, target]]
 
-# Split data into features (X) and target (y)
-X = df[features].values  
-y = df[target].values
+# --- Stratified Random Sampling ---
+strata_variables = ['floor_area_sqm', 'remaining_years', 'month']
+df['stratum'] = df[strata_variables].astype(str).agg('-'.join, axis=1)
+df_sampled = df.groupby('stratum', group_keys=False).apply(lambda x: x.sample(frac=0.2, random_state=42), include_groups=False)
 
-# Normalize numerical features (remaining_years and floor_area_sqm)
+# Convert 'month' column to numerical representation (e.g., year)
+df_sampled['year'] = pd.to_datetime(df_sampled['month']).dt.year 
+features = ["remaining_years", "floor_area_sqm", "year"] 
+
+# --- Data Preparation ---
+X = df_sampled[features]
+y = df_sampled[target]
+
+# Normalize numerical features
 scaler = StandardScaler()
-X[:, :2] = scaler.fit_transform(X[:, :2])  # Apply scaling to numerical features only
+X = scaler.fit_transform(X)
 
 # Split the dataset into training and testing sets
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Before One-Hot Encoding, convert 'flat_type' to numerical using Label Encoding
-label_encoder = LabelEncoder()
-X[:, 2] = label_encoder.fit_transform(X[:, 2]) # Apply Label Encoding
+# --- Model Training and Evaluation ---
+svm_model = SVR()
 
-# One-Hot Encoding for Room Type
-encoder = OneHotEncoder(sparse_output=False, handle_unknown='ignore')  # Create a OneHotEncoder object
-encoded_flat_type_train = encoder.fit_transform(X_train[:, 2].reshape(-1, 1))  # Fit and transform on training data
-encoded_flat_type_test = encoder.transform(X_test[:, 2].reshape(-1, 1))  # Transform testing data
+# Hyperparameter tuning using RandomizedSearchCV with KFold
+param_distributions = {'C': np.logspace(-1, 1, 3), 'kernel': ['linear', 'rbf']}
+kf = KFold(n_splits=5, shuffle=True, random_state=42)  # Define KFold with 5 splits
+random_search = RandomizedSearchCV(svm_model, param_distributions, n_iter=6, cv=kf, scoring='neg_mean_squared_error', random_state=42)
+random_search.fit(X, y)  # Fit on the entire dataset (X, y)
 
-# Replace the original 'room_type' column with the encoded columns
-X_train = np.concatenate([X_train[:, :2], encoded_flat_type_train], axis=1)
-X_test = np.concatenate([X_test[:, :2], encoded_flat_type_test], axis=1)
-
-# Use scikit-learn's SVR
-svm_model = SVR() 
-
-# Hyperparameter tuning using GridSearchCV
-param_grid = {'C': [0.1, 1, 10], 'kernel': ['linear', 'rbf']}  # Define parameter grid
-grid_search = GridSearchCV(svm_model, param_grid, cv=3, scoring='neg_mean_squared_error')
-grid_search.fit(X_train, y_train)
-
-# Get the best model from grid search
-best_svm_model = grid_search.best_estimator_
+# Get the best model from random search
+best_svm_model = random_search.best_estimator_
 
 # Make predictions on the test set
 y_pred = best_svm_model.predict(X_test)
 
 # Evaluate the model
 mse = mean_squared_error(y_test, y_pred)
-rmse = np.sqrt(mse)  # Calculate RMSE
-mae = mean_absolute_error(y_test, y_pred)  # Calculate MAE
-r2 = r2_score(y_test, y_pred)  # Calculate R-squared
+rmse = np.sqrt(mse)
+mae = mean_absolute_error(y_test, y_pred)
+r2 = r2_score(y_test, y_pred)
 
-# Calculate Adjusted R-squared
-n = len(y_test)
-p = X_test.shape[1]
-adjusted_r2 = 1 - (1 - r2) * (n - 1) / (n - p - 1)
+print(f"Mean Squared Error (MSE): {mse:.4f}")
+print(f"Root Mean Squared Error (RMSE): {rmse:.4f}")
+print(f"Mean Absolute Error (MAE): {mae:.4f}")
+print(f"R-squared (R2): {r2:.4f}")
 
-print(f"SVM Model Mean Squared Error (MSE): {mse:.4f}")
-print(f"SVM Model Root Mean Squared Error (RMSE): {rmse:.4f}")
-print(f"SVM Model Mean Absolute Error (MAE): {mae:.4f}")
-print(f"SVM Model R-squared (R2): {r2:.4f}")
-print(f"SVM Model Adjusted R-squared: {adjusted_r2:.4f}")
+# --- Future Predictions with Multiple Scenarios ---
+latest_year = df_sampled['year'].max()
+future_years = np.arange(latest_year + 1, latest_year + 6)
+num_scenarios = 5
+all_future_predictions = []
+
+for year in future_years:
+    remaining_years_scenarios = np.random.randint(40, 60, size=num_scenarios)
+    floor_area_sqm_scenarios = np.random.randint(90, 120, size=num_scenarios)
+    future_data_year = pd.DataFrame({
+        'remaining_years': remaining_years_scenarios,
+        'floor_area_sqm': floor_area_sqm_scenarios,
+        'year': [year] * num_scenarios
+    })
+    future_data_scaled = scaler.transform(future_data_year[features])
+    future_predictions_year = best_svm_model.predict(future_data_scaled)
+    all_future_predictions.extend(future_predictions_year)
+
+future_predictions_df = pd.DataFrame({
+    'year': np.repeat(future_years, num_scenarios),
+    'predicted_price': all_future_predictions
+})
+
+# --- Visualization ---
+
+# Box plot: Future Price Distribution per Year
+plt.figure(figsize=(10, 6))
+plt.boxplot([future_predictions_df[future_predictions_df['year'] == year]['predicted_price']
+             for year in future_years], tick_labels=future_years)
+plt.xlabel("Year")
+plt.ylabel("Predicted Resale Price")
+plt.title("Future Resale Price Distribution per Year")
+plt.grid(True)
+plt.show()
+
+# Violin Plot
+plt.figure(figsize=(10, 6))
+sns.violinplot(x='year', y='predicted_price', hue='year', data=future_predictions_df, palette="Set3", legend=False)
+plt.xlabel("Year")
+plt.ylabel("Predicted Resale Price")
+plt.title("Distribution of Predicted Resale Prices per Year")
+plt.grid(True)
+plt.show()
+
+# Scatter Plots
+plt.figure(figsize=(8, 6))
+plt.scatter(X_test[:, 0], y_pred, alpha=0.5, color='blue', label='Predicted Price')
+plt.scatter(X_test[:, 0], y_test, alpha=0.5, color='red', label='Actual Price')  
+plt.xlabel("Remaining Years (Test Data)")
+plt.ylabel("Resale Price")  
+plt.title("Predicted vs. Actual Resale Price (Test Data)")
+plt.legend()  
+plt.grid(True)
+plt.show()
+
+# Line Plot with Confidence Intervals and Mean
+plt.figure(figsize=(10, 6))
+
+# Plot median predicted price
+plt.plot(future_years, future_predictions_df.groupby('year')['predicted_price'].median(), 
+         marker='o', linestyle='-', label="Median Predicted Price")
+
+# Calculate and add confidence intervals using bootstrapping
+lower_bound, upper_bound = get_prediction_intervals(best_svm_model, future_data_scaled, percentile=95)
+plt.fill_between(future_years, lower_bound, upper_bound, alpha=0.2, label="Confidence Interval (95%)")
+
+# Calculate and plot mean predicted price
+plt.plot(future_years, future_predictions_df.groupby('year')['predicted_price'].mean(), 
+         linestyle='--', label="Mean Predicted Price")
+plt.xlabel("Year")
+plt.ylabel("Predicted Resale Price")
+plt.title("Predicted Resale Price Trend over Time")
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# Histograms
+plt.figure(figsize=(8, 6))
+plt.hist(future_predictions_df['predicted_price'], bins=20, color='skyblue', edgecolor='black')
+plt.xlabel("Predicted Resale Price")
+plt.ylabel("Frequency")
+plt.title("Distribution of Predicted Resale Prices")
+plt.grid(True)
+plt.show()
+
+plt.figure(figsize=(8, 6))
+plt.hist(y_test - y_pred, bins=20, color='salmon', edgecolor='black')
+plt.xlabel("Prediction Error")
+plt.ylabel("Frequency")
+plt.title("Distribution of Prediction Errors")
+plt.grid(True)
+plt.show()
+
+# Heatmap (Correlation Matrix)
+correlation_matrix = df_sampled[features + [target]].corr()
+plt.figure(figsize=(10, 8))
+sns.heatmap(correlation_matrix, annot=True, cmap="coolwarm", fmt=".2f")
+plt.title("Correlation Matrix")
+plt.show()
