@@ -3,96 +3,100 @@ import pandas as pd
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.regularizers import l2
-from tensorflow.keras.callbacks import EarlyStopping
-from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.preprocessing import LabelEncoder, OneHotEncoder, StandardScaler
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import r2_score, mean_absolute_error
+from sklearn.compose import ColumnTransformer
+from sklearn.metrics import r2_score
 import matplotlib.pyplot as plt
-from tensorflow.keras.callbacks import LearningRateScheduler
+import os
 
 # Load dataset
 data = pd.read_csv("cleanedHDB.csv")
 
-# Convert 'month' to datetime format
+# Convert 'month' to datetime format and extract 'year'
 data['month'] = pd.to_datetime(data['month'])
 data['year'] = data['month'].dt.year
 
 # Convert resale_price to numeric (remove "$" and ",")
 data['resale_price'] = data['resale_price'].replace('[\$,]', '', regex=True).astype(float)
 
-# Encode 'town' using LabelEncoder
-label_encoder = LabelEncoder()
-data['town_encoded'] = label_encoder.fit_transform(data['town'])
-
 # Define features and target
-features = ["remaining_years", "floor_area_sqm", "town_encoded"]
+features = ["remaining_years", "floor_area_sqm", "year", "flat_type", "storey_range", "flat_model", "town"]
 target = "resale_price"
 
 # Ensure dataset only contains relevant columns
-data = data[features + [target, "month", "year"]]
+data = data[features + [target]]
 
 # Remove outliers (99th percentile)
 upper_limit = data[target].quantile(0.99)
 data = data[data[target] <= upper_limit]
 
-# StandardScaler to scale numerical data
-scaler = StandardScaler()
-X = data.drop(columns=[target, "month"])
+# Handle categorical features using OneHotEncoding
+categorical_features = ["flat_type", "storey_range", "flat_model", "town"]
+numerical_features = ["remaining_years", "floor_area_sqm", "year"]
+
+preprocessor = ColumnTransformer(
+    transformers=[
+        ("num", StandardScaler(), numerical_features),
+        ("cat", OneHotEncoder(handle_unknown="ignore", sparse_output=False), categorical_features)
+    ]
+)
+
+# Prepare feature matrix (X) and target vector (y)
+X = data.drop(columns=[target])
 y = data[target]
 
 # Train-test split (80% train, 20% test)
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Scale the data
-X_train_scaled = scaler.fit_transform(X_train)
-X_test_scaled = scaler.transform(X_test)
+# Transform data
+X_train_scaled = preprocessor.fit_transform(X_train)
+X_test_scaled = preprocessor.transform(X_test)
 
-# Define Neural Network model with increased complexity and adjustments
+# Define Neural Network model
 model = Sequential([
-    Dense(512, activation='relu', kernel_regularizer=l2(0.001), input_shape=(X_train_scaled.shape[1],)),  # Increased size, reduced regularization
-    Dropout(0.3),  # Adjusted dropout to prevent overfitting
-    Dense(256, activation='relu', kernel_regularizer=l2(0.001)),  # Reduced L2 penalty
-    Dropout(0.2),
-    Dense(128, activation='relu', kernel_regularizer=l2(0.001)),
-    Dropout(0.2),
+    Dense(128, activation='relu', input_shape=(X_train_scaled.shape[1],)),
+    Dropout(0.3),
     Dense(64, activation='relu'),
-    Dense(32, activation='relu'),
-    Dense(1)
+    Dropout(0.3),
+    Dense(1)  # Output layer (Regression problem)
 ])
 
-# Compile the model with a slightly lower learning rate
-optimizer = Adam(learning_rate=0.0001)  # Further reduced learning rate
-model.compile(optimizer=optimizer, loss='mse', metrics=['mae'])
+# Compile model
+model.compile(optimizer='adam', loss='mse', metrics=['mae'])
 
-# Train the model with early stopping
-early_stopping = EarlyStopping(monitor='val_loss', patience=20, restore_best_weights=True)  # Increased patience
-history = model.fit(X_train_scaled, y_train, epochs=100, batch_size=8, validation_data=(X_test_scaled, y_test), callbacks=[early_stopping], verbose=1)
+# Train the model
+model.fit(X_train_scaled, y_train, epochs=50, batch_size=32, validation_data=(X_test_scaled, y_test), verbose=1)
+
+# Save the trained neural network model
+model_filename = "neural_network_model.h5"
+model.save(model_filename)
+
+# Get the model size
+model_size = os.path.getsize(model_filename) / 1024  # Convert bytes to KB
+print(f"Neural Network Model Size: {model_size:.2f} KB")
 
 # Make predictions
 y_pred = model.predict(X_test_scaled).flatten()
 
-# Calculate R² score and MAE
+# Calculate R² score
 r2 = r2_score(y_test, y_pred)
-mae = mean_absolute_error(y_test, y_pred)
 print(f"R² Score: {r2:.4f}")
-print(f"MAE: {mae:.4f}")
-
-# Debugging: Check a few predictions vs actual
-print(pd.DataFrame({"Actual": y_test[:10].values, "Predicted": y_pred[:10]}))
 
 # Future Predictions
-data['future_year'] = data['year'] + 8  # Predict 8 years into the future
-data['remaining_years'] -= 8  # Adjust remaining lease years
-X_future = data[features]
-X_future_scaled = scaler.transform(X_future)
+future_data = data.copy()
+future_data["year"] += 8  # Predict 8 years into the future
+X_future = future_data.drop(columns=[target])
+
+# Scale future data
+X_future_scaled = preprocessor.transform(X_future)
 future_predictions = model.predict(X_future_scaled).flatten()
 
-data['predicted_resale_price'] = future_predictions
+# Store predictions
+future_data["predicted_resale_price"] = future_predictions
 
 # Calculate average predicted price per year
-avg_predicted_prices = data.groupby("future_year")["predicted_resale_price"].mean()
+avg_predicted_prices = future_data.groupby("year")["predicted_resale_price"].mean()
 avg_predicted_prices.index = avg_predicted_prices.index.astype(int)
 
 # Print and plot results
