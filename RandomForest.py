@@ -1,7 +1,7 @@
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder, StandardScaler
-from sklearn.tree import DecisionTreeRegressor
-from sklearn.metrics import r2_score
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
 import pandas as pd
 import matplotlib.pyplot as plt
 
@@ -53,15 +53,18 @@ scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 
-# Initialize the DecisionTreeRegressor model
-reg = DecisionTreeRegressor(max_depth=5, random_state=42)
+# Initialize RandomForestRegressor
+reg = RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42, n_jobs=-1)
 
 # Train the model with the scaled training data
 reg.fit(X_train_scaled, y_train)
 y_predict = reg.predict(X_test_scaled)
 
-# Using r2 for performance metric
+# performance metric
 r2 = r2_score(y_test, y_predict)
+mae = mean_absolute_error(y_test, y_predict)
+mse = mean_squared_error(y_test, y_predict)
+
 
 # Scale the new data for future predictions using the trained scaler
 new_data_scaled = scaler.transform(new_data)
@@ -77,6 +80,8 @@ avg_predicted_prices.index = avg_predicted_prices.index.astype(int)
 # Print the average predicted prices per year and performance metrics
 print(avg_predicted_prices)
 print(f"R² Score: {r2:.4f}")
+print(f"Mean Absolute Error (MAE): {mae:.2f}")
+print(f"Mean Squared Error (MSE): {mse:.2f}")
 
 # Plot the average predicted resale price over the upcoming years
 plt.figure(figsize=(8, 4))
