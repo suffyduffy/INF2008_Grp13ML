@@ -5,9 +5,9 @@ import matplotlib.pyplot as plt
 models = ["Decision Tree", "Neural Network", "SVM"]
 
 # Define the metrics
-r2_scores = [0.7274, 0.9064, 0.1440]  # R² Score (Higher is Better)
-mae_scores = [63437, 37409, 111951]  # Mean Absolute Error (Lower is Better)
-mse_scores = [7.5e9, 2.5e9, 2.5e10]  # Mean Squared Error (Lower is Better)
+r2_scores = [0.7274, 0.9064, 0.4909]  # R² Score (Higher is Better)
+mae_scores = [63437, 37409, 76140]  # Mean Absolute Error (Lower is Better)
+mse_scores = [7.5e9, 2.5e9, 1.2e10]  # Mean Squared Error (Lower is Better)
 
 # Set colors for each model
 colors = ['green', 'blue', 'red']
