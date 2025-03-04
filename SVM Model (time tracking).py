@@ -1,6 +1,7 @@
 import time
 import os
 import psutil
+import joblib
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split, RandomizedSearchCV, KFold
@@ -128,6 +129,16 @@ future_predictions_df = pd.DataFrame({
     'year': np.repeat(future_years, num_scenarios),
     'predicted_price': all_future_predictions
 })
+
+# Save the trained model to a file (using joblib)
+model_filename = 'SVM_model.pkl'
+joblib.dump(best_svm_model, model_filename)
+
+# Check the size of the saved model file
+model_size = os.path.getsize(model_filename)
+
+# Print the model size in bytes
+print(f"Model size: {model_size / 1024:.2f} KB")  # Size in KB
 
 # --- Visualization ---
 
