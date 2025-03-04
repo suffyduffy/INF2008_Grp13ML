@@ -1,3 +1,7 @@
+import time
+import os
+import psutil
+import joblib
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split, RandomizedSearchCV, KFold
@@ -6,6 +10,14 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from sklearn.svm import SVR
 import matplotlib.pyplot as plt
 import seaborn as sns
+
+# Track memory usage before and after model training
+def get_memory_usage():
+    process = psutil.Process(os.getpid())
+    return process.memory_info().rss / 1024 ** 2  # in MB
+
+# Track the time taken for training and testing the model
+start_time = time.time()
 
 # Function to remove outliers using IQR
 def remove_outliers_iqr_numpy(data, column):
@@ -74,6 +86,11 @@ random_search.fit(X, y)  # Fit on the entire dataset (X, y)
 # Get the best model from random search
 best_svm_model = random_search.best_estimator_
 
+# Time taken for training
+training_time = time.time() - start_time  # in seconds
+
+# Track the time taken for testing (prediction phase)
+testing_start_time = time.time()
 # Make predictions on the test set
 y_pred = best_svm_model.predict(X_test)
 
@@ -87,6 +104,8 @@ print(f"Mean Squared Error (MSE): {mse:.4f}")
 print(f"Root Mean Squared Error (RMSE): {rmse:.4f}")
 print(f"Mean Absolute Error (MAE): {mae:.4f}")
 print(f"R-squared (R2): {r2:.4f}")
+
+testing_end_time = time.time()
 
 # --- Future Predictions with Multiple Scenarios ---
 latest_year = df_sampled['year'].max()
@@ -110,6 +129,16 @@ future_predictions_df = pd.DataFrame({
     'year': np.repeat(future_years, num_scenarios),
     'predicted_price': all_future_predictions
 })
+
+# Save the trained model to a file (using joblib)
+model_filename = 'SVM_model.pkl'
+joblib.dump(best_svm_model, model_filename)
+
+# Check the size of the saved model file
+model_size = os.path.getsize(model_filename)
+
+# Print the model size in bytes
+print(f"Model size: {model_size / 1024:.2f} KB")  # Size in KB
 
 # --- Visualization ---
 
@@ -187,3 +216,14 @@ plt.figure(figsize=(10, 8))
 sns.heatmap(correlation_matrix, annot=True, cmap="coolwarm", fmt=".2f")
 plt.title("Correlation Matrix")
 plt.show()
+
+# Time taken for testing
+testing_time = testing_end_time - testing_start_time  # in seconds
+
+# Memory usage during training
+memory_used = get_memory_usage()
+
+# Print time and memory usage
+print(f"Time taken to train the model: {training_time:.2f} seconds")
+print(f"Time taken to test the model: {testing_time:.2f} seconds")
+print(f"Memory used during model training: {memory_used:.2f} MB")
