@@ -1,5 +1,5 @@
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
 import pandas as pd
@@ -15,27 +15,40 @@ df[["storey_min", "storey_max"]] = df["storey_range"].str.split(" TO ", expand=T
 # Compute average storey
 df["storey_avg"] = (df["storey_min"] + df["storey_max"]) / 2
 
-# Initialize LabelEncoder
-label_encoder = LabelEncoder()
+# Categorize storey range
+def categorize_storey(storey_avg):
+    if storey_avg <= 4:
+        return "Low"
+    elif storey_avg <= 8:
+        return "Middle"
+    else:
+        return "High"
 
-# Apply LabelEncoder to the 'town' column
-df['town_encoded'] = label_encoder.fit_transform(df['town'])
-df['estateType_encoded'] = label_encoder.fit_transform(df['estate_type'])
+df["storey_category"] = df["storey_avg"].apply(categorize_storey)
+
+# One-Hot Encoding for categorical variables
+encoder = OneHotEncoder(sparse_output=False, drop='first')
+one_hot_encoded = encoder.fit_transform(df[['town', 'estate_type', 'storey_category']])
+one_hot_columns = encoder.get_feature_names_out(['town', 'estate_type', 'storey_category'])
+df_encoded = pd.DataFrame(one_hot_encoded, columns=one_hot_columns)
+
+# Concatenate the one-hot encoded columns with the original DataFrame
+df = pd.concat([df, df_encoded], axis=1).drop(columns=['town', 'estate_type', 'storey_category'])
 
 if 'resale_price' in df.columns:
     print("Column exists")
 else:
     print("Column does not exist")
 
-# Features that affect resale value based on research on goo0gle
-features = ["remaining_years", "floor_area_sqm", "town_encoded", "estateType_encoded", "storey_avg"]
+# Features include years + floor area + storey category + estate type + town
+features = ["remaining_years", "floor_area_sqm"] + list(one_hot_columns)
 target = "resale_price"
 
 # Ensure the dataset contains only the selected columns
 df = df[features + [target] + ['month']]
 
-# Remove outliers by filtering resale prices beyond the 99th percentile
-upper_limit = df['resale_price'].quantile(0.99)
+# Remove outliers by filtering resale prices beyond the 95th percentile
+upper_limit = df['resale_price'].quantile(0.95)
 df = df[df['resale_price'] <= upper_limit]
 
 # Prepare feature matrix (X) and target vector (y)
