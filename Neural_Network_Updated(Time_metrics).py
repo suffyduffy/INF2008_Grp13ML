@@ -9,7 +9,7 @@ from tensorflow.keras.layers import Dense, Dropout
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder, StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.compose import ColumnTransformer
-from sklearn.metrics import r2_score
+from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
 import matplotlib.pyplot as plt
 
 # Function to get memory usage in MB (RAM usage)
@@ -92,9 +92,26 @@ y_pred = model.predict(X_test_scaled).flatten()
 # Track testing time
 testing_time = time.time() - testing_start_time
 
-# Calculate R² score
-r2 = r2_score(y_test, y_pred)
+# Compute Metrics
+mse = mean_squared_error(y_test, y_pred)  # Mean Squared Error
+rmse = np.sqrt(mse)  # Root Mean Squared Error
+mae = mean_absolute_error(y_test, y_pred)  # Mean Absolute Error
+r2 = r2_score(y_test, y_pred)  # R² Score
+
+# Compute Adjusted R² Score
+n = X_test.shape[0]  # Number of test samples
+p = X_test.shape[1]  # Number of predictors
+adjusted_r2 = 1 - ((1 - r2) * (n - 1) / (n - p - 1))
+
+# Print Performance Metrics
+print(f"Mean Squared Error (MSE): {mse:.4f}")
+print(f"Root Mean Squared Error (RMSE): {rmse:.4f}")
+print(f"Mean Absolute Error (MAE): {mae:.4f}")
 print(f"R² Score: {r2:.4f}")
+print(f"Adjusted R² Score: {adjusted_r2:.4f}")
+print(f"Time taken to train the model: {training_time:.2f} seconds")
+print(f"Time taken to test the model: {testing_time:.2f} seconds")
+print(f"Memory used during training: {training_memory:.2f} MB")
 
 # Future Predictions
 future_data = data.copy()
@@ -114,11 +131,6 @@ avg_predicted_prices.index = avg_predicted_prices.index.astype(int)
 
 # Print results
 print(avg_predicted_prices)
-
-# Print Model Performance Metrics
-print(f"Time taken to train the model: {training_time:.2f} seconds")
-print(f"Time taken to test the model: {testing_time:.2f} seconds")
-print(f"Memory used during training: {training_memory:.2f} MB")
 
 # Plot results
 plt.figure(figsize=(8, 4))
