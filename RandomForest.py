@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 # Load the cleaned dataset
 df = pd.read_csv("cleanedHDB.csv")
 
+#Here til ---- is prepping/preprocessing for the RandomForest
 # Convert 'month' to datetime format for proper plotting
 df['month'] = pd.to_datetime(df['month'])
 
@@ -39,16 +40,16 @@ if 'resale_price' in df.columns:
     print("Column exists")
 else:
     print("Column does not exist")
+# -----------------------------------------------------------------
+# Features include years + floor area + storey category + estate type + town + no. mrt stations
+features = ["remaining_years", "floor_area_sqm", "mrt_station"] + list(one_hot_columns)
+target = "resale_price" #target obvious lah eh
 
-# Features include years + floor area + storey category + estate type + town
-features = ["remaining_years", "floor_area_sqm"] + list(one_hot_columns)
-target = "resale_price"
-
-# Ensure the dataset contains only the selected columns
+# Ensure the dataset contains only the selected columns idt this is necessary but good habit
 df = df[features + [target] + ['month']]
 
-# Remove outliers by filtering resale prices beyond the 95th percentile
-upper_limit = df['resale_price'].quantile(0.95)
+# Remove outliers by filtering resale prices beyond the 99th percentile agn depends on ur dataset
+upper_limit = df['resale_price'].quantile(0.99)
 df = df[df['resale_price'] <= upper_limit]
 
 # Prepare feature matrix (X) and target vector (y)
@@ -73,12 +74,12 @@ reg = RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42, n_j
 reg.fit(X_train_scaled, y_train)
 y_predict = reg.predict(X_test_scaled)
 
-# performance metric
+# performance metrics
 r2 = r2_score(y_test, y_predict)
 mae = mean_absolute_error(y_test, y_predict)
 mse = mean_squared_error(y_test, y_predict)
 
-
+# This part until the ---- is for visualisation
 # Scale the new data for future predictions using the trained scaler
 new_data_scaled = scaler.transform(new_data)
 future_predictions = reg.predict(new_data_scaled)
@@ -89,7 +90,7 @@ df['future_year'] = df['year'] + 8  # Set future year for plotting purposes
 # Calculate the average predicted resale price per future year
 avg_predicted_prices = df.groupby('future_year')['predicted_resale_price'].mean()
 avg_predicted_prices.index = avg_predicted_prices.index.astype(int)
-
+# --------------------------------------------------------------------------------------
 # Print the average predicted prices per year and performance metrics
 print(avg_predicted_prices)
 print(f"R² Score: {r2:.4f}")
