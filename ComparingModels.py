@@ -10,7 +10,7 @@ mae_scores = [54994, 37409, 76140]  # Mean Absolute Error (Lower is Better)
 mse_scores = [4.9e9, 2.5e9, 1.2e10]  # Mean Squared Error (Lower is Better)
 
 # Set colors for each model
-colors = ['green', 'blue', 'red']
+colors = ['green', 'blue', 'orange']
 
 # Create a figure with 3 subplots
 fig, axes = plt.subplots(1, 3, figsize=(16, 5))  # Increased width for better spacing
