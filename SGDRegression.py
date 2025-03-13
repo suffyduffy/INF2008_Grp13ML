@@ -7,6 +7,9 @@ from sklearn.linear_model import SGDRegressor
 from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
 import seaborn as sns
+import os
+import time
+import sys
 
 # Function to remove outliers using IQR
 def remove_outliers_iqr_numpy(data, column):
@@ -20,7 +23,7 @@ def remove_outliers_iqr_numpy(data, column):
     return data_filtered
 
 # Load the HDB dataset
-df = pd.read_csv('cleanedHDB.csv')
+df = pd.read_csv('cleanedHDBFull.csv')
 
 # Remove outliers from 'resale_price'
 df = remove_outliers_iqr_numpy(df, 'resale_price')
@@ -72,6 +75,7 @@ X[numerical_features] = scaler.fit_transform(X[numerical_features])
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
 # --- Model Training and Evaluation ---
+start_time = time.time()  # Record training start time
 
 # Baseline Model
 baseline_model = SGDRegressor(random_state=42)
@@ -93,6 +97,12 @@ random_search.fit(X, y)
 
 # Get the best model from random search
 best_sgd_model = random_search.best_estimator_
+
+end_time = time.time()  # Record training end time
+training_time = end_time - start_time
+
+# Get model size
+model_size = sys.getsizeof(best_sgd_model)
 
 # Make predictions on the test set
 y_pred = best_sgd_model.predict(X_test)
@@ -116,6 +126,10 @@ print(f"Hyperparameter Tuning MSE Improvement: {mse_improvement:.4f}")
 print(f"Hyperparameter Tuning R-squared Improvement: {r2_improvement:.4f}")
 
 # --- Future Predictions with Multiple Scenarios ---
+
+# Record testing start time
+start_time_test = time.time()
+
 latest_year = df_sampled['year'].max()
 future_years = np.arange(latest_year + 0, latest_year + 9)
 num_scenarios = 5  # Number of scenarios per year
@@ -145,6 +159,19 @@ future_predictions_df = pd.DataFrame({
     'year': np.repeat(future_years, num_scenarios),
     'predicted_price': all_future_predictions
 })
+
+# Record testing end time
+end_time_test = time.time()
+
+# Calculate testing time
+testing_time = end_time_test - start_time_test
+
+# Memory Usage
+memory_usage = df.memory_usage(deep=True).sum()  # Memory used by DataFrame
+print(f"Model Size: {model_size / 1024:.2f} KB")
+print(f"Training Time: {training_time:.2f} seconds")
+print(f"Testing Time: {testing_time:.2f} seconds")
+print(f"Memory Usage: {memory_usage / (1024 * 1024):.2f} MB")
 
 # --- Visualization ---
 
