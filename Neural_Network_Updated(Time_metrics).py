@@ -3,12 +3,9 @@ import os
 import psutil
 import numpy as np
 import pandas as pd
-import tensorflow as tf
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout
-from sklearn.preprocessing import LabelEncoder, OneHotEncoder, StandardScaler
-from sklearn.model_selection import train_test_split
-from sklearn.compose import ColumnTransformer
+from sklearn.neural_network import MLPRegressor
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.model_selection import train_test_split, ShuffleSplit
 from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
 import matplotlib.pyplot as plt
 
@@ -22,62 +19,82 @@ start_time = time.time()
 start_memory = get_memory_usage()
 
 # Load dataset
-data = pd.read_csv("cleanedHDB.csv")
+df = pd.read_csv("cleanedHDB.csv")
 
-# Convert 'month' to datetime format and extract 'year'
-data['month'] = pd.to_datetime(data['month'])
-data['year'] = data['month'].dt.year
+# Convert 'month' to datetime format
+df['month'] = pd.to_datetime(df['month'])
 
-# Convert resale_price to numeric (remove "$" and ",")
-data['resale_price'] = data['resale_price'].replace('[\$,]', '', regex=True).astype(float)
+# Extract storey min and max
+df[['storey_min', 'storey_max']] = df['storey_range'].str.split(' TO ', expand=True).astype(int)
+df['storey_avg'] = (df['storey_min'] + df['storey_max']) / 2
+
+def categorize_storey(storey_avg):
+    if storey_avg <= 4:
+        return "Low"
+    elif storey_avg <= 8:
+        return "Middle"
+    else:
+        return "High"
+
+df['storey_category'] = df['storey_avg'].apply(categorize_storey)
+
+# Removing outliers using IQR
+Q1 = df['resale_price'].quantile(0.25)
+Q3 = df['resale_price'].quantile(0.75)
+IQR = Q3 - Q1
+lower_bound = Q1 - 1.5 * IQR
+upper_bound = Q3 + 1.5 * IQR
+df = df[(df['resale_price'] >= lower_bound) & (df['resale_price'] <= upper_bound)]
+
+# One-Hot Encoding for categorical variables
+encoder = OneHotEncoder(sparse_output=False, drop='first')
+one_hot_encoded = encoder.fit_transform(df[['flat_type', 'estate_type', 'storey_category', 'flat_model', 'town']])
+one_hot_columns = encoder.get_feature_names_out(['flat_type', 'estate_type', 'storey_category', 'flat_model', 'town'])
+df_encoded = pd.DataFrame(one_hot_encoded, columns=one_hot_columns)
+
+df = pd.concat([df, df_encoded], axis=1).drop(columns=['flat_type', 'estate_type', 'storey_category', 'flat_model', 'town'])
 
 # Define features and target
-features = ["remaining_years", "floor_area_sqm", "year", "flat_type", "storey_range", "flat_model", "town"]
+features = ["remaining_years", "floor_area_sqm", "mrt_station", "year"] + list(one_hot_columns)
 target = "resale_price"
 
-# Ensure dataset only contains relevant columns
-data = data[features + [target]]
+df = df[features + [target] + ['month']]
 
-# Remove outliers (99th percentile)
-upper_limit = data[target].quantile(0.99)
-data = data[data[target] <= upper_limit]
+# Remove any NaN values
+df = df.dropna()
 
-# Handle categorical features using OneHotEncoding
-categorical_features = ["flat_type", "storey_range", "flat_model", "town"]
-numerical_features = ["remaining_years", "floor_area_sqm", "year"]
+# Reset index before applying ShuffleSplit
+df = df.reset_index(drop=True)
 
-preprocessor = ColumnTransformer(
-    transformers=[
-        ("num", StandardScaler(), numerical_features),
-        ("cat", OneHotEncoder(handle_unknown="ignore", sparse_output=False), categorical_features)
-    ]
-)
+# Apply ShuffleSplit for random sampling
+split = ShuffleSplit(n_splits=1, test_size=0.8, random_state=42)
+for train_index, test_index in split.split(df):
+    df_sampled = df.iloc[test_index]  # Use .iloc instead of .loc
 
 # Prepare feature matrix (X) and target vector (y)
-X = data.drop(columns=[target])
-y = data[target]
+X = df_sampled.drop(columns=[target, 'month'])
+y = df_sampled[target]
 
 # Train-test split (80% train, 20% test)
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Transform data
-X_train_scaled = preprocessor.fit_transform(X_train)
-X_test_scaled = preprocessor.transform(X_test)
+# Standard Scaling
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
 
-# Define Neural Network model
-model = Sequential([
-    Dense(128, activation='relu', input_shape=(X_train_scaled.shape[1],)),
-    Dropout(0.3),
-    Dense(64, activation='relu'),
-    Dropout(0.3),
-    Dense(1)  # Output layer (Regression problem)
-])
-
-# Compile model
-model.compile(optimizer='adam', loss='mse', metrics=['mae'])
+# Define MLPRegressor (Scikit-Learn's Neural Network model)
+model = MLPRegressor(hidden_layer_sizes=(256, 128, 64), activation='relu', solver='adam',
+                     alpha=0.0005, batch_size=64, max_iter=75, random_state=42, verbose=True,
+                     early_stopping=True, n_iter_no_change=5)
 
 # Train the model
-history = model.fit(X_train_scaled, y_train, epochs=50, batch_size=32, validation_data=(X_test_scaled, y_test), verbose=1)
+model.fit(X_train_scaled, y_train)
+
+# Estimating and giving Model Size (storage space)
+total_params = sum(np.prod(w.shape) for w in model.coefs_) + sum(np.prod(b.shape) for b in model.intercepts_)
+model_size_kb = (total_params * 8) / 1024  # Convert bytes to KB
+print(f"Estimated Model Size: {model_size_kb:.2f} KB")
 
 # Track training time and memory usage after training
 training_time = time.time() - start_time  # Training duration
@@ -87,7 +104,10 @@ training_memory = get_memory_usage() - start_memory  # Memory used
 testing_start_time = time.time()
 
 # Make predictions
-y_pred = model.predict(X_test_scaled).flatten()
+y_pred = model.predict(X_test_scaled)
+
+# Replace NaN predictions with mean
+y_pred = np.nan_to_num(y_pred, nan=np.nanmean(y_pred))
 
 # Track testing time
 testing_time = time.time() - testing_start_time
@@ -114,23 +134,13 @@ print(f"Time taken to test the model: {testing_time:.2f} seconds")
 print(f"Memory used during training: {training_memory:.2f} MB")
 
 # Future Predictions
-future_data = data.copy()
-future_data["year"] += 8  # Predict 8 years into the future
-X_future = future_data.drop(columns=[target])
+df['future_year'] = df['month'].dt.year + 8  # Predict 8 years into the future
+new_data = df[features]
+new_data_scaled = scaler.transform(new_data)
+future_predictions = model.predict(new_data_scaled)
 
-# Scale future data
-X_future_scaled = preprocessor.transform(X_future)
-future_predictions = model.predict(X_future_scaled).flatten()
-
-# Store predictions
-future_data["predicted_resale_price"] = future_predictions
-
-# Calculate average predicted price per year
-avg_predicted_prices = future_data.groupby("year")["predicted_resale_price"].mean()
-avg_predicted_prices.index = avg_predicted_prices.index.astype(int)
-
-# Print results
-print(avg_predicted_prices)
+df['predicted_resale_price'] = future_predictions
+avg_predicted_prices = df.groupby('future_year')['predicted_resale_price'].mean()
 
 # Plot results
 plt.figure(figsize=(8, 4))
@@ -138,7 +148,7 @@ plt.plot(avg_predicted_prices.index, avg_predicted_prices.values, linestyle="-",
 plt.xticks(avg_predicted_prices.index)
 plt.xlabel("Upcoming Years")
 plt.ylabel("Average Predicted Resale Price ($)")
-plt.title("Resale Prediction by Neural Network")
+plt.title("Resale Prediction by MLPRegressor (Neural Network)")
 plt.legend()
 plt.grid(True)
 plt.show()
