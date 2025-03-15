@@ -38,7 +38,7 @@ def categorize_storey(storey_avg):
 
 df['storey_category'] = df['storey_avg'].apply(categorize_storey)
 
-# Removing outliers using IQR
+# Remove outliers using IQR
 Q1 = df['resale_price'].quantile(0.25)
 Q3 = df['resale_price'].quantile(0.75)
 IQR = Q3 - Q1
@@ -91,7 +91,7 @@ model = MLPRegressor(hidden_layer_sizes=(256, 128, 64), activation='relu', solve
 # Train the model
 model.fit(X_train_scaled, y_train)
 
-# Estimating and giving Model Size (storage space)
+# Estimate Model Size
 total_params = sum(np.prod(w.shape) for w in model.coefs_) + sum(np.prod(b.shape) for b in model.intercepts_)
 model_size_kb = (total_params * 8) / 1024  # Convert bytes to KB
 print(f"Estimated Model Size: {model_size_kb:.2f} KB")
