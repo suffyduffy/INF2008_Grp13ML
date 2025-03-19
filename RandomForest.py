@@ -145,3 +145,27 @@ plt.title("Resale Prediction by Decision Tree")
 plt.legend()
 plt.grid(True)
 plt.show()
+
+plt.figure(figsize=(12, 6))
+# Subplot for Training Data
+plt.subplot(1, 2, 1)
+plt.scatter(y_train, reg.predict(X_train_scaled), color='blue', label='Train Data')
+plt.plot([min(y_train), max(y_train)], [min(y_train), max(y_train)], color='red', linestyle='--', label="Perfect Fit")
+plt.title('Training Data: Underfit, Overfit or Goodfit')
+plt.xlabel('Actual Resale Price')
+plt.ylabel('Predicted Resale Price')
+plt.legend()
+plt.grid(True)
+
+# Subplot for Test Data
+plt.subplot(1, 2, 2)
+plt.scatter(y_test, y_predict, color='green', label='Test Data')
+plt.plot([min(y_test), max(y_test)], [min(y_test), max(y_test)], color='red', linestyle='--', label="Perfect Fit")
+plt.title('Testing Data: Underfit, Overfit or Goodfit')
+plt.xlabel('Actual Resale Price')
+plt.ylabel('Predicted Resale Price')
+plt.legend()
+plt.grid(True)
+
+plt.tight_layout()
+plt.show()

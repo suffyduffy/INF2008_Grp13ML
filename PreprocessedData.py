@@ -12,7 +12,7 @@ if 'month' in df.columns:
 else:
     print("Error: 'month' column is missing from the dataset.")
 
-# Filter data for years 2017 to 2025
+# Collate data for years 2017 to 2025
 df_filtered = df[(df['year'] >= 2017) & (df['year'] <= 2025)]
 
 # Calculate average resale price per year

@@ -152,3 +152,29 @@ plt.title("Resale Prediction by MLPRegressor (Neural Network)")
 plt.legend()
 plt.grid(True)
 plt.show()
+
+# Visualizing Model Fit: Scatter Plots for Training & Test Data
+plt.figure(figsize=(12, 6))
+
+# Subplot for Training Data
+plt.subplot(1, 2, 1)
+plt.scatter(y_train, y_pred, color='blue', alpha=0.5, label='Train Data')
+plt.plot([min(y_train), max(y_train)], [min(y_train), max(y_train)], color='red', linestyle='--', label="Perfect Fit")
+plt.title('Training Data: Underfit, Overfit or Good Fit')
+plt.xlabel('Actual Resale Price')
+plt.ylabel('Predicted Resale Price')
+plt.legend()
+plt.grid(True)
+
+# Subplot for Test Data
+plt.subplot(1, 2, 2)
+plt.scatter(y_test, y_pred, color='green', alpha=0.5, label='Test Data')
+plt.plot([min(y_test), max(y_test)], [min(y_test), max(y_test)], color='red', linestyle='--', label="Perfect Fit")
+plt.title('Testing Data: Underfit, Overfit or Good Fit')
+plt.xlabel('Actual Resale Price')
+plt.ylabel('Predicted Resale Price')
+plt.legend()
+plt.grid(True)
+
+plt.tight_layout()
+plt.show()
