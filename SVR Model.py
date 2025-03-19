@@ -100,6 +100,8 @@ kf = KFold(n_splits=5, shuffle=True, random_state=42)
 random_search = RandomizedSearchCV(svm_model, param_distributions, n_iter=20, cv=kf, scoring='neg_mean_squared_error', random_state=42, n_jobs=-1)
 random_search.fit(X, y)
 
+# ----- Algorithm Implementation -----
+
 # Get the best model from random search
 best_svm_model = random_search.best_estimator_
 
@@ -112,6 +114,7 @@ model_size = sys.getsizeof(best_svm_model)
 # Make predictions on the test set
 y_pred = best_svm_model.predict(X_test)
 
+# ----- Performance Metrics -----
 # Evaluate the model
 mse = mean_squared_error(y_test, y_pred)
 rmse = np.sqrt(mse)
@@ -266,7 +269,7 @@ plt.grid(True)
 plt.show()
 
 # Heatmap (Correlation Matrix)
-numerical_features_for_corr = ['remaining_years', 'floor_area_sqm', 'resale_price','year']
+numerical_features_for_corr = ['remaining_years', 'floor_area_sqm', 'resale_price','year','mrt_station']
 correlation_matrix = df_sampled[numerical_features_for_corr].corr()
 plt.figure(figsize=(10, 8))
 sns.heatmap(correlation_matrix, annot=True, cmap="coolwarm", fmt=".2f")
