@@ -2,12 +2,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Define model names
-models = ["Random Forest", "Neural Network", "SVM"]
+models = ["Random Forest", "Neural Network", "SVR"]
 
 # Define the updated metrics
-r2_scores = [0.8075, 0.8431, 0.4909]  # R² Score (Higher is Better)
-mae_scores = [56430.30, 46115.61, 76140.28]  # Mean Absolute Error (Lower is Better)
-mse_scores = [5348514486.05, 4048307830.83, 12210140226.56]  # Mean Squared Error (Lower is Better)
+r2_scores = [0.8075, 0.8431, 0.4909]  # R² Score (Higher is better)
+mae_scores = [56430.30, 46115.61, 76140.28]  # Mean Absolute Error (Lower is better)
+mse_scores = [5348514486.05, 4048307830.83, 12210140226.56]  # Mean Squared Error (Lower is better)
 
 # Set colors for each model
 colors = ['green', 'blue', 'orange']
